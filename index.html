@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="my" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>V2RAY Admin Portal - Control Center</title>
+  
+  <!-- Website Favicon Logo -->
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/VPS-SCRIPT/V2RAY-PANEL/main/v2ray.png" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind) {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              admin: { 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c' },
+              brand: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+              dark: { 950: '#070b14', 900: '#0d1322', 850: '#111827', 800: '#151d30', 750: '#1c263e', 700: '#24314f' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #070b14; color: #f3f4f6; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .glass-card { background: rgba(17, 24, 39, 0.95); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-input { background: #0b1120; border: 1px solid #1f2d47; color: #ffffff; }
+    .glass-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* SIM Category Selector Option Style */
+    .sim-choice-btn {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .sim-choice-btn:hover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.08);
+      transform: translateY(-1px);
+    }
+    .sim-choice-btn.active {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.18);
+      box-shadow: 0 0 0 1px #3b82f6, 0 4px 12px -2px rgba(59, 130, 246, 0.35);
+    }
+  </style>
+
+  <!-- Firebase Compatibility SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-dark-950 text-gray-100 min-h-screen flex flex-col antialiased select-none">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-3"></div>
+
+  <!-- Global Loader Modal -->
+  <div id="global-loader" style="display: none;" class="fixed inset-0 bg-dark-950/80 z-50 backdrop-blur-sm flex items-center justify-center pointer-events-auto">
+    <div class="flex flex-col items-center gap-3 p-6 glass-card rounded-2xl border border-brand-500/40 shadow-2xl">
+      <div class="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      <p id="loader-text" class="text-xs font-semibold text-gray-200">လုပ်ဆောင်နေပါသည်...</p>
+    </div>
+  </div>
+
+  <!-- Slip View Modal -->
+  <div id="modal-slip-preview" style="display: none;" class="fixed inset-0 bg-dark-950/90 z-50 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-card max-w-lg w-full rounded-2xl p-4 border border-gray-700 shadow-2xl relative space-y-3">
+      <div class="flex items-center justify-between pb-2 border-b border-gray-800">
+        <div>
+          <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-receipt text-brand-500 mr-2"></i>ငွေလွှဲပြေစာ (Slip Preview)</h4>
+          <p id="modal-slip-info" class="text-[11px] text-gray-400 mt-0.5">TXN-000000 | 0.00 THB</p>
+        </div>
+        <button onclick="closeSlipModal()" class="w-8 h-8 rounded-full bg-dark-800 hover:bg-gray-700 text-gray-400 hover:text-white flex items-center justify-center text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="py-2 flex items-center justify-center max-h-[65vh] overflow-hidden bg-dark-950/50 rounded-xl border border-gray-800">
+        <img id="modal-slip-img" src="" alt="Slip Preview" class="max-h-full max-w-full rounded-lg object-contain" />
+      </div>
+
+      <div class="flex gap-2">
+        <button id="modal-btn-approve" onclick="quickApproveFromModal()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition">
+          <i class="fa-solid fa-circle-check mr-1"></i> Approve အတည်ပြုမည်
+        </button>
+        <button id="modal-btn-reject" onclick="quickRejectFromModal()" class="flex-1 py-2.5 bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition">
+          <i class="fa-solid fa-circle-xmark mr-1"></i> Reject ပယ်ချမည်
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reject Reason Modal -->
+  <div id="modal-reject-reason" style="display: none;" class="fixed inset-0 bg-dark-950/90 z-50 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-card max-w-md w-full rounded-2xl p-5 border border-rose-600/40 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+        <h4 class="text-sm font-bold text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-2"></i>ငွေလွှဲတောင်းဆိုမှု ပယ်ချမည်</h4>
+        <button onclick="closeRejectModal()" class="text-gray-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-gray-300">ပယ်ချရသည့် အကြောင်းရင်းကို ရွေးပါ သို့မဟုတ် ရိုက်ထည့်ပါ:</p>
+      
+      <div class="space-y-2">
+        <button type="button" onclick="setRejectReasonText('ငွေလွှဲပြေစာ Slip ပုံ မမှန်ကန်ပါ/မရှင်းလင်းပါ')" class="w-full text-left text-xs p-2.5 rounded-lg bg-dark-800 hover:bg-dark-700 border border-gray-700 text-gray-300">
+          • ငွေလွှဲပြေစာ Slip ပုံ မမှန်ကန်ပါ/မရှင်းလင်းပါ
+        </button>
+        <button type="button" onclick="setRejectReasonText('လွှဲငွေပမာဏ မကိုက်ညီပါ')" class="w-full text-left text-xs p-2.5 rounded-lg bg-dark-800 hover:bg-dark-700 border border-gray-700 text-gray-300">
+          • လွှဲငွေပမာဏ မကိုက်ညီပါ
+        </button>
+        <button type="button" onclick="setRejectReasonText('ဘဏ်အကောင့်ထဲ ငွေလက်ခံရရှိခြင်း မရှိသေးပါ')" class="w-full text-left text-xs p-2.5 rounded-lg bg-dark-800 hover:bg-dark-700 border border-gray-700 text-gray-300">
+          • ဘဏ်အကောင့်ထဲ ငွေလက်ခံရရှိခြင်း မရှိသေးပါ
+        </button>
+      </div>
+
+      <textarea id="reject-reason-input" rows="2" class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="အခြား အကြောင်းရင်း ရိုက်ထည့်ပါ..."></textarea>
+
+      <div class="flex gap-2">
+        <button onclick="closeRejectModal()" class="flex-1 py-2 bg-dark-800 text-gray-300 rounded-xl text-xs font-semibold">မလုပ်တော့ပါ</button>
+        <button onclick="confirmRejectPayment()" class="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold">Reject အတည်ပြုမည်</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bank Add/Edit Modal -->
+  <div id="modal-bank-form" style="display: none;" class="fixed inset-0 bg-dark-950/90 z-50 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="glass-card max-w-lg w-full rounded-2xl p-5 border border-gray-700 shadow-2xl space-y-4 my-6">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+        <h4 id="bank-modal-title" class="text-sm font-bold text-white"><i class="fa-solid fa-building-columns text-brand-500 mr-2"></i>ဘဏ်စာရင်း အသစ်ထည့်မည်</h4>
+        <button onclick="closeBankModal()" class="text-gray-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form onsubmit="saveBankForm(event)" class="space-y-3">
+        <input type="hidden" id="bank-edit-id" value="" />
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-medium text-gray-300 mb-1">ဘဏ် / ငွေပေးချေမှု အမျိုးအစား *</label>
+            <input type="text" id="bank-name-input" required class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="ဥပမာ - PromptPay, KBank, KBZPay" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-gray-300 mb-1">အကောင့်ပိုင်ရှင် အမည် *</label>
+            <input type="text" id="bank-accname-input" required class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="ဥပမာ - U MYA MYA" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-gray-300 mb-1">အကောင့်နံပါတ် / ဖုန်းနံပါတ် *</label>
+          <input type="text" id="bank-accnum-input" required class="w-full p-2.5 glass-input rounded-xl text-xs font-mono" placeholder="ဥပမာ - 0812345678 သို့ 123-4-56789-0" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-gray-300 mb-1">ဘဏ် Logo Link (Image URL) <span class="text-gray-500 font-normal">(Optional)</span></label>
+          <input type="url" id="bank-logourl-input" class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="https://example.com/logo.png" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-gray-300 mb-1">PromptPay / Bank QR Code Image Link <span class="text-gray-500 font-normal">(Optional)</span></label>
+          <input type="url" id="bank-qrurl-input" class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="https://example.com/promptpay-qr.jpg" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-gray-300 mb-1">မှတ်ချက် / လမ်းညွှန်ချက် (Optional)</label>
+          <input type="text" id="bank-note-input" class="w-full p-2.5 glass-input rounded-xl text-xs" placeholder="ဥပမာ - လွှဲငွေတိကျစွာ လွှဲပြီး Slip ပုံ သေချာတင်ပေးပါ" />
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="closeBankModal()" class="flex-1 py-2.5 bg-dark-800 text-gray-300 rounded-xl text-xs font-semibold">မလုပ်တော့ပါ</button>
+          <button type="submit" class="flex-1 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-brand-600/30">သိမ်းဆည်းမည်</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT SERVER WITH SIM CATEGORY LOGOS -->
+  <div id="modal-server-form" style="display: none;" class="fixed inset-0 bg-dark-950/90 z-50 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="glass-card max-w-lg w-full rounded-2xl p-6 border border-[#1e293b] shadow-2xl space-y-4 my-6 bg-[#0f172a]/95">
+      <div class="flex items-center justify-between border-b border-gray-800/80 pb-3">
+        <div class="flex items-center gap-2 text-white">
+          <i class="fa-solid fa-server text-brand-500 text-base"></i>
+          <h4 id="server-modal-title" class="text-base font-bold text-white tracking-wide">Add Server</h4>
+        </div>
+        <button onclick="closeServerModal()" class="text-gray-400 hover:text-white text-base">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form onsubmit="saveServerForm(event)" class="space-y-3.5">
+        <input type="hidden" id="server-edit-id" value="" />
+        <input type="hidden" id="server-sim-category-input" value="all" />
+
+        <!-- SIM Category Selector with Round Logos -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-200 mb-1.5 flex items-center justify-between">
+            <span><i class="fa-solid fa-sim-card text-brand-400 mr-1.5"></i>SIM Network Category:</span>
+            <span id="selected-sim-label" class="text-[11px] font-bold text-brand-400 font-mono">All SIMs</span>
+          </label>
+          <div class="grid grid-cols-5 gap-1.5 pt-0.5">
+            
+            <!-- Option: All -->
+            <button type="button" onclick="selectFormSimCategory('all')" id="sim-opt-all" class="sim-choice-btn active p-2 rounded-xl border border-gray-700 bg-dark-800 flex flex-col items-center gap-1 cursor-pointer text-center">
+              <div class="w-8 h-8 rounded-full border-2 border-brand-500 bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs shadow">
+                <i class="fa-solid fa-globe"></i>
+              </div>
+              <span class="text-[10px] font-semibold text-gray-200">All</span>
+            </button>
+
+            <!-- Option: DTAC -->
+            <button type="button" onclick="selectFormSimCategory('dtac')" id="sim-opt-dtac" class="sim-choice-btn p-2 rounded-xl border border-gray-700 bg-dark-800 flex flex-col items-center gap-1 cursor-pointer text-center">
+              <div class="w-8 h-8 rounded-full border-2 border-blue-400 bg-white p-0.5 shadow flex items-center justify-center overflow-hidden">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQXIB1stuxiDc1L4kBzwhYIMgrw-_uw78xbw0gX7ob0RA&s=10" alt="DTAC" class="w-full h-full object-contain rounded-full" />
+              </div>
+              <span class="text-[10px] font-semibold text-blue-400">DTAC</span>
+            </button>
+
+            <!-- Option: TRUE H -->
+            <button type="button" onclick="selectFormSimCategory('true')" id="sim-opt-true" class="sim-choice-btn p-2 rounded-xl border border-gray-700 bg-dark-800 flex flex-col items-center gap-1 cursor-pointer text-center">
+              <div class="w-8 h-8 rounded-full border-2 border-red-400 bg-white p-0.5 shadow flex items-center justify-center overflow-hidden">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmwX8pfzoxcMnEJBBQXx15N6Wv6e5ZWsVbhVHeoMEA0Q&s=10" alt="TRUE H" class="w-full h-full object-contain rounded-full" />
+              </div>
+              <span class="text-[10px] font-semibold text-red-400">TRUE</span>
+            </button>
+
+            <!-- Option: AIS -->
+            <button type="button" onclick="selectFormSimCategory('ais')" id="sim-opt-ais" class="sim-choice-btn p-2 rounded-xl border border-gray-700 bg-dark-800 flex flex-col items-center gap-1 cursor-pointer text-center">
+              <div class="w-8 h-8 rounded-full border-2 border-emerald-400 bg-white p-0.5 shadow flex items-center justify-center overflow-hidden">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSHUEr7TzZLCDSayxzU-7K8odP5ZohzIdo66-F6AH5TM2N28E98di2RnJo&s=10" alt="AIS" class="w-full h-full object-contain rounded-full" />
+              </div>
+              <span class="text-[10px] font-semibold text-emerald-400">AIS</span>
+            </button>
+
+            <!-- Option: Myanmar -->
+            <button type="button" onclick="selectFormSimCategory('myanmar')" id="sim-opt-myanmar" class="sim-choice-btn p-2 rounded-xl border border-gray-700 bg-dark-800 flex flex-col items-center gap-1 cursor-pointer text-center">
+              <div class="w-8 h-8 rounded-full border-2 border-amber-400 bg-white p-0.5 shadow flex items-center justify-center overflow-hidden">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQVTZ7g-naT0eH4mxeNtVnFU4MtbvyR-LaBDZbnacuN8g&s=10" alt="Myanmar All Sim" class="w-full h-full object-contain rounded-full" />
+              </div>
+              <span class="text-[10px] font-semibold text-amber-400">Myanmar</span>
+            </button>
+
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-200 mb-1.5">Server Name *</label>
+          <input type="text" id="server-name-input" required class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="e.g. DTAC VIP Node 1 / Myanmar All Sim 1" />
+        </div>
+        
+        <div>
+          <label class="block text-xs font-medium text-gray-200 mb-1.5">Server Note (Description)</label>
+          <input type="text" id="server-note-input" class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="e.g. 10Gbps High Speed, Low Ping" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-200 mb-1.5">Flag Link (Image URL or Emoji)</label>
+            <input type="text" id="server-flag-input" class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="https://flagcdn.com/w80/th.png သို့ 🇹🇭" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-200 mb-1.5">Inbound ID *</label>
+            <input type="number" id="server-inbound-input" required value="1" class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white font-mono placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="1" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-200 mb-1.5">Panel Link (URL) *</label>
+          <input type="url" id="server-panelurl-input" required class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white font-mono placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="http://v-1.d-chat.site:2053/vG5gW31oZL111" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-200 mb-1.5">Username *</label>
+            <input type="text" id="server-username-input" required class="w-full px-3.5 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="admin" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-200 mb-1.5">Password *</label>
+            <div class="relative">
+              <input type="password" id="server-password-input" required class="w-full px-3.5 pr-8 py-2.5 bg-[#0b1222] border border-[#1e293b] rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" placeholder="password" />
+              <button type="button" onclick="toggleServerPasswordVisibility()" class="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-200 text-xs">
+                <i id="server-pwd-eye-icon" class="fa-regular fa-eye"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" id="btn-save-server" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2">
+            Save Server Details
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 1. ADMIN AUTH SECTION -->
+  <section id="admin-auth-section" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md glass-card rounded-3xl p-6 sm:p-8 shadow-2xl border border-brand-500/30 relative">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white mb-2.5 shadow-lg shadow-brand-600/30">
+          <i class="fa-solid fa-lock text-2xl"></i>
+        </div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">V2RAY <span class="text-brand-500">ADMIN</span></h1>
+        <p class="text-xs text-gray-400 mt-1">စီမံခန့်ခွဲသူများသာ ဝင်ရောက်ခွင့်ရှိသည်</p>
+      </div>
+
+      <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-300 mb-1.5">Admin Email</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 text-xs"><i class="fa-regular fa-envelope"></i></span>
+            <input type="email" id="admin-login-email" required class="w-full pl-9 pr-3.5 py-2.5 glass-input rounded-xl text-sm" placeholder="admin@example.com" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-300 mb-1.5">Admin Password</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 text-xs"><i class="fa-solid fa-key"></i></span>
+            <input type="password" id="admin-login-password" required class="w-full pl-9 pr-3.5 py-2.5 glass-input rounded-xl text-sm" placeholder="••••••••" />
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-brand-600/30 cursor-pointer">
+          Admin စနစ်သို့ ဝင်ရောက်မည်
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 2. ADMIN MAIN DASHBOARD & MANAGEMENT -->
+  <div id="admin-app-section" style="display: none;" class="min-h-screen flex flex-col">
+    
+    <!-- Admin Header -->
+    <header class="glass-card border-b border-gray-800 sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-600/30">
+            <i class="fa-solid fa-gauge-high text-sm"></i>
+          </div>
+          <div>
+            <span class="font-bold text-base tracking-wide text-white">V2RAY <span class="text-brand-500">ADMIN</span></span>
+            <span class="text-[10px] bg-brand-500/20 text-brand-300 border border-brand-500/30 px-2 py-0.5 rounded-full ml-2 font-mono">SUPERADMIN</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:block text-right">
+            <p id="admin-user-display" class="text-xs font-bold text-white">Super Admin</p>
+            <p id="admin-email-display" class="text-[10px] text-gray-400">admin@system.com</p>
+          </div>
+          <button onclick="handleAdminLogout()" class="px-3 py-1.5 bg-rose-600/10 text-rose-400 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-semibold border border-rose-500/20 transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-dark-950 border-b border-gray-800/80">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar">
+        <button onclick="switchAdminTab('servers')" id="adm-tab-servers" class="py-3 text-xs sm:text-sm font-bold border-b-2 border-brand-500 text-brand-400 flex items-center gap-2 whitespace-nowrap">
+          <i class="fa-solid fa-server"></i> V2RAY ဆာဗာများ (X-UI)
+          <span id="badge-servers-count" class="px-2 py-0.2 bg-brand-500 text-white font-black rounded-full text-[10px]">0</span>
+        </button>
+        <button onclick="switchAdminTab('payments')" id="adm-tab-payments" class="py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
+          <i class="fa-solid fa-receipt"></i> ငွေသွင်းစစ်ဆေးခြင်း
+          <span id="badge-pending-count" class="px-2 py-0.2 bg-amber-500 text-dark-950 font-black rounded-full text-[10px]">0</span>
+        </button>
+        <button onclick="switchAdminTab('banks')" id="adm-tab-banks" class="py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
+          <i class="fa-solid fa-building-columns"></i> ဘဏ်စာရင်းများ
+        </button>
+        <button onclick="switchAdminTab('users')" id="adm-tab-users" class="py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
+          <i class="fa-solid fa-users"></i> Users
+        </button>
+        <button onclick="switchAdminTab('settings')" id="adm-tab-settings" class="py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
+          <i class="fa-solid fa-gear"></i> ဆက်တင်များ
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content Body -->
+    <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 space-y-6">
+
+      <!-- STAT CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div onclick="switchAdminTab('servers')" class="glass-card rounded-2xl p-4 border border-brand-500/30 cursor-pointer hover:bg-white/5 transition">
+          <div class="flex items-center justify-between text-gray-400 mb-1">
+            <span class="text-xs font-semibold">Active Servers</span>
+            <div class="w-7 h-7 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs"><i class="fa-solid fa-server"></i></div>
+          </div>
+          <h3 id="stat-adm-servers" class="text-2xl font-bold text-brand-400">0</h3>
+        </div>
+
+        <div onclick="switchAdminTab('payments'); filterPayments('pending');" class="glass-card rounded-2xl p-4 border border-amber-500/30 cursor-pointer hover:bg-white/5 transition">
+          <div class="flex items-center justify-between text-gray-400 mb-1">
+            <span class="text-xs font-semibold">စစ်ဆေးရန်ကျန် (Pending)</span>
+            <div class="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-xs"><i class="fa-solid fa-clock"></i></div>
+          </div>
+          <h3 id="stat-adm-pending" class="text-2xl font-bold text-amber-400">0</h3>
+        </div>
+
+        <div onclick="switchAdminTab('payments'); filterPayments('approved');" class="glass-card rounded-2xl p-4 border border-emerald-500/30 cursor-pointer hover:bg-white/5 transition">
+          <div class="flex items-center justify-between text-gray-400 mb-1">
+            <span class="text-xs font-semibold">ခွင့်ပြုပြီး (Approved)</span>
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs"><i class="fa-solid fa-circle-check"></i></div>
+          </div>
+          <h3 id="stat-adm-approved" class="text-2xl font-bold text-emerald-400">0</h3>
+        </div>
+
+        <div onclick="switchAdminTab('payments'); filterPayments('all');" class="glass-card rounded-2xl p-4 border border-gray-800 cursor-pointer hover:bg-white/5 transition">
+          <div class="flex items-center justify-between text-gray-400 mb-1">
+            <span class="text-xs font-semibold">စုစုပေါင်းသွင်းငွေ</span>
+            <div class="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-xs"><i class="fa-solid fa-money-bill-wave"></i></div>
+          </div>
+          <h3 id="stat-adm-volume" class="text-2xl font-bold text-white">0 ฿</h3>
+        </div>
+      </div>
+
+      <!-- VIEW 1: V2RAY SERVER MANAGEMENT (DEFAULT) -->
+      <section id="adm-view-servers" class="space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-server text-brand-400 mr-2"></i>V2RAY ဆာဗာများ (X-UI Nodes)</h4>
+            <p class="text-xs text-gray-400">ဆာဗာ URL၊ SIM Category၊ Inbound ID၊ Panel Login များဖြင့် တိုက်ရိုက်ချိတ်ဆက်ပြီး စီမံခန့်ခွဲပါ</p>
+          </div>
+          <button onclick="openAddServerModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-brand-600/30">
+            <i class="fa-solid fa-plus"></i> Add Server
+          </button>
+        </div>
+
+        <div id="servers-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Server Cards injected by JS -->
+        </div>
+      </section>
+
+      <!-- VIEW 2: PAYMENT MANAGEMENT TABLE -->
+      <section id="adm-view-payments" style="display: none;" class="space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex gap-2">
+            <button onclick="filterPayments('all')" id="btn-filter-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white border border-brand-500">အားလုံး</button>
+            <button onclick="filterPayments('pending')" id="btn-filter-pending" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-gray-400 hover:text-white border border-gray-800">Pending သာ</button>
+            <button onclick="filterPayments('approved')" id="btn-filter-approved" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-gray-400 hover:text-white border border-gray-800">Approved</button>
+            <button onclick="filterPayments('rejected')" id="btn-filter-rejected" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-gray-400 hover:text-white border border-gray-800">Rejected</button>
+          </div>
+          <button onclick="deleteAllPayments()" class="px-3 py-1.5 bg-rose-600/20 border border-rose-500/40 hover:bg-rose-600 text-rose-400 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-lg">
+            <i class="fa-solid fa-trash-can"></i> မှတ်တမ်းအားလုံးဖျက်မည်
+          </button>
+        </div>
+
+        <div class="glass-card rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-dark-950 text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-800 text-[11px]">
+                <tr>
+                  <th class="p-3.5">Payment ID</th>
+                  <th class="p-3.5">User</th>
+                  <th class="p-3.5">ပမာဏ</th>
+                  <th class="p-3.5">Slip ဓာတ်ပုံ</th>
+                  <th class="p-3.5">ရက်စွဲ/အချိန်</th>
+                  <th class="p-3.5">အခြေအနေ</th>
+                  <th class="p-3.5 text-right">စီမံချက်</th>
+                </tr>
+              </thead>
+              <tbody id="payment-table-body" class="divide-y divide-gray-800/60">
+                <tr><td colspan="7" class="p-8 text-center text-gray-500">မှတ်တမ်းများ ရယူနေပါသည်...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: BANK MANAGEMENT -->
+      <section id="adm-view-banks" style="display: none;" class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-building-columns text-brand-500 mr-2"></i>ဘဏ်စာရင်းနှင့် QR Code စီမံခန့်ခွဲခြင်း</h4>
+            <p class="text-xs text-gray-400">ဤနေရာတွင် ထည့်သွင်းသမျှ ဘဏ် Logo နှင့် QR Code များကို User ဘက်တွင် ချက်ချင်း မြင်တွေ့ရပါမည်</p>
+          </div>
+          <button onclick="openAddBankModal()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-brand-600/30">
+            <i class="fa-solid fa-plus"></i> ဘဏ်အကောင့် / QR Code အသစ်ထည့်မည်
+          </button>
+        </div>
+
+        <div id="banks-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Bank Cards injected by JS -->
+        </div>
+      </section>
+
+      <!-- VIEW 4: USERS LIST TABLE -->
+      <section id="adm-view-users" style="display: none;" class="space-y-4">
+        <div class="glass-card rounded-2xl border border-gray-800 overflow-hidden">
+          <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+            <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-users text-brand-400 mr-2"></i>Users စာရင်း</h4>
+            <span id="user-total-badge" class="text-xs text-gray-400">0 Users</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-dark-950 text-gray-400 uppercase font-semibold border-b border-gray-800 text-[11px]">
+                <tr>
+                  <th class="p-3.5">UID</th>
+                  <th class="p-3.5">အမည်</th>
+                  <th class="p-3.5">Email</th>
+                  <th class="p-3.5">လက်ကျန်ငွေ</th>
+                  <th class="p-3.5">သွင်းပြီးငွေ</th>
+                  <th class="p-3.5">Role</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body" class="divide-y divide-gray-800/60"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: SETTINGS -->
+      <section id="adm-view-settings" style="display: none;" class="space-y-4">
+        <div>
+          <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-gear text-brand-500 mr-2"></i>စနစ် ဆက်တင်များ (System Settings)</h4>
+          <p class="text-xs text-gray-400">ဤနေရာတွင် ပြင်ဆင်မှုများသည် အသုံးပြုသူ (User) ဘက်တွင် ချက်ချင်းပြောင်းလဲသက်ရောက်မည်ဖြစ်သည်။</p>
+        </div>
+
+        <div class="glass-card max-w-md rounded-2xl p-5 border border-gray-800 space-y-4">
+          <h5 class="text-xs font-bold text-gray-200 border-b border-gray-800 pb-2">ငွေကြေးနှင့် ဒေတာ သတ်မှတ်ချက်</h5>
+          
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1.5">1 THB လျှင် ရရှိမည့် Data (GB) ပမာဏ</label>
+            <div class="flex items-center gap-3">
+              <input type="number" step="0.1" id="setting-gb-per-thb" class="flex-1 p-2.5 glass-input rounded-xl text-sm font-bold text-brand-400" placeholder="ဥပမာ 6" value="6" />
+              <span class="text-xs text-gray-400 font-semibold">GB / THB</span>
+            </div>
+            <p class="text-[10px] text-gray-500 mt-1">လက်ရှိသတ်မှတ်ချက်အရ အသုံးပြုသူများ App တွင် မြင်တွေ့ရမည့် နှုန်းထားဖြစ်သည်။ (ဥပမာ 6 GB = 1 THB)</p>
+          </div>
+
+          <button onclick="saveSystemSettings()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-brand-600/30">
+            <i class="fa-solid fa-floppy-disk mr-1"></i> သိမ်းဆည်းမည်
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const SIM_LOGOS = {
+      'dtac': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQXIB1stuxiDc1L4kBzwhYIMgrw-_uw78xbw0gX7ob0RA&s=10',
+      'true': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmwX8pfzoxcMnEJBBQXx15N6Wv6e5ZWsVbhVHeoMEA0Q&s=10',
+      'ais': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSHUEr7TzZLCDSayxzU-7K8odP5ZohzIdo66-F6AH5TM2N28E98di2RnJo&s=10',
+      'myanmar': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQVTZ7g-naT0eH4mxeNtVnFU4MtbvyR-LaBDZbnacuN8g&s=10'
+    };
+
+    window.showToast = function(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `p-3 rounded-xl border text-xs text-white shadow-xl transition-all duration-300 flex items-center gap-2 ${
+        type === 'error' ? 'bg-rose-900/90 border-rose-600' : 
+        type === 'success' ? 'bg-emerald-900/90 border-emerald-600' : 'bg-gray-800/90 border-gray-700'
+      }`;
+      const icon = type === 'error' ? '<i class="fa-solid fa-circle-exclamation text-rose-400"></i>' :
+                   type === 'success' ? '<i class="fa-solid fa-circle-check text-emerald-400"></i>' :
+                   '<i class="fa-solid fa-circle-info text-blue-400"></i>';
+      toast.innerHTML = `${icon}<span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => { toast.remove(); }, 3500);
+    };
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAXr3AJTOoaYTY0e9pMwcASxDkJGidZfvU",
+      authDomain: "v2ray-system.firebaseapp.com",
+      projectId: "v2ray-system",
+      storageBucket: "v2ray-system.firebasestorage.app",
+      messagingSenderId: "836195472727",
+      appId: "1:836195472727:web:6956e52dcd7434a2321a12",
+      measurementId: "G-DJMQJKVMM3"
+    };
+
+    let auth = null;
+    let db = null;
+    let currentAdmin = null;
+    let paymentsCache = [];
+    let banksCache = [];
+    let serversCache = [];
+    let currentFilter = 'all';
+    let activeModalPayment = null;
+    let pendingRejectPaymentId = null;
+
+    try {
+      if (window.firebase) {
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+
+        auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            await verifyAdminAccess(user);
+          } else {
+            currentAdmin = null;
+            document.getElementById('admin-app-section').style.display = 'none';
+            document.getElementById('admin-auth-section').style.display = 'flex';
+          }
+        });
+      }
+    } catch(err) {
+      console.error("Firebase init failed:", err);
+    }
+
+    async function verifyAdminAccess(user) {
+      try {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        if (!userDoc.exists || userDoc.data().role !== 'admin') {
+          showToast("ဝင်ရောက်ခွင့် မရှိပါ: ဤအကောင့်သည် Admin မဟုတ်ပါ!", "error");
+          await auth.signOut();
+          return;
+        }
+
+        currentAdmin = user;
+        document.getElementById('admin-user-display').innerText = user.displayName || 'Super Admin';
+        document.getElementById('admin-email-display').innerText = user.email;
+        document.getElementById('admin-auth-section').style.display = 'none';
+        document.getElementById('admin-app-section').style.display = 'flex';
+
+        showToast("Admin Panel သို့ အောင်မြင်စွာ ဝင်ရောက်ပါပြီ!", "success");
+        initAdminListeners();
+      } catch(err) {
+        showToast("Error checking admin: " + err.message, "error");
+        await auth.signOut();
+      }
+    }
+
+    function initAdminListeners() {
+      // 1. Servers Listener
+      db.collection('servers').onSnapshot((snap) => {
+        serversCache = [];
+        let activeCount = 0;
+        snap.forEach(doc => {
+          const s = doc.data();
+          s.id = doc.id;
+          serversCache.push(s);
+          if (s.status !== 'inactive') activeCount++;
+        });
+        document.getElementById('badge-servers-count').innerText = serversCache.length;
+        document.getElementById('stat-adm-servers').innerText = activeCount;
+        renderServersList();
+      });
+
+      // 2. Payments Listener
+      db.collection('topupRequests').onSnapshot((snap) => {
+        paymentsCache = [];
+        let pendingCount = 0;
+        let approvedCount = 0;
+        let totalVolume = 0;
+
+        snap.forEach((doc) => {
+          const data = doc.data();
+          data.id = doc.id;
+          paymentsCache.push(data);
+          if (data.status === 'pending') pendingCount++;
+          if (data.status === 'approved') {
+            approvedCount++;
+            totalVolume += (data.amount || 0);
+          }
+        });
+
+        paymentsCache.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        document.getElementById('badge-pending-count').innerText = pendingCount;
+        document.getElementById('stat-adm-pending').innerText = pendingCount;
+        document.getElementById('stat-adm-approved').innerText = approvedCount;
+        document.getElementById('stat-adm-volume').innerText = totalVolume.toLocaleString() + " ฿";
+
+        renderPaymentTable();
+      });
+
+      // 3. Banks Listener
+      db.collection('banks').onSnapshot((snap) => {
+        banksCache = [];
+        snap.forEach(doc => {
+          const b = doc.data();
+          b.id = doc.id;
+          banksCache.push(b);
+        });
+        renderBanksList();
+      });
+
+      // 4. Users Listener
+      db.collection('users').onSnapshot((snap) => {
+        document.getElementById('user-total-badge').innerText = `${snap.size} Users`;
+        let html = '';
+        snap.forEach((doc) => {
+          const u = doc.data();
+          html += `
+            <tr class="hover:bg-dark-800/40 transition">
+              <td class="p-3.5 font-mono text-[11px] text-gray-400">${doc.id.substring(0, 8)}...</td>
+              <td class="p-3.5 font-bold text-white">${u.displayName || '-'}</td>
+              <td class="p-3.5 text-gray-300">${u.email || '-'}</td>
+              <td class="p-3.5 font-bold text-emerald-400">${(u.balance || 0).toFixed(2)} THB</td>
+              <td class="p-3.5 text-gray-300">${(u.totalTopUp || 0).toFixed(2)} THB</td>
+              <td class="p-3.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'admin' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-gray-700/40 text-gray-300'}">${(u.role || 'user').toUpperCase()}</span></td>
+            </tr>
+          `;
+        });
+        document.getElementById('users-table-body').innerHTML = html;
+      });
+
+      // 5. Settings Listener (general or system)
+      db.collection('settings').doc('general').onSnapshot((doc) => {
+        if(doc.exists) {
+          const data = doc.data();
+          if(data.dataPerThb) {
+            document.getElementById('setting-gb-per-thb').value = data.dataPerThb;
+          }
+        }
+      });
+    }
+
+    // =========================================================================
+    // SETTINGS LOGIC
+    // =========================================================================
+    window.saveSystemSettings = async function() {
+      const val = parseFloat(document.getElementById('setting-gb-per-thb').value);
+      if(isNaN(val) || val <= 0) return showToast("ကျေးဇူးပြု၍ ကိန်းဂဏန်းအမှန် ထည့်သွင်းပါ", "error");
+
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        await db.collection('settings').doc('general').set({
+          dataPerThb: val,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: currentAdmin.email
+        }, { merge: true });
+        showToast("ဆက်တင်များကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ", "success");
+      } catch(err) {
+        showToast("Error saving settings: " + err.message, "error");
+      } finally {
+        document.getElementById('global-loader').style.display = 'none';
+      }
+    };
+
+    // =========================================================================
+    // SIM CATEGORY SELECTION IN MODAL
+    // =========================================================================
+    window.selectFormSimCategory = function(cat) {
+      document.getElementById('server-sim-category-input').value = cat;
+      const opts = ['all', 'dtac', 'true', 'ais', 'myanmar'];
+      opts.forEach(c => {
+        const btn = document.getElementById(`sim-opt-${c}`);
+        if (btn) {
+          if (c === cat) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        }
+      });
+
+      const labelMap = {
+        'all': 'All SIMs (General)',
+        'dtac': 'DTAC (Thailand)',
+        'true': 'TRUE H (Thailand)',
+        'ais': 'AIS (Thailand)',
+        'myanmar': 'Myanmar All SIMs'
+      };
+      document.getElementById('selected-sim-label').innerText = labelMap[cat] || cat.toUpperCase();
+    };
+
+    // =========================================================================
+    // V2RAY SERVER MANAGEMENT (CRUD)
+    // =========================================================================
+    function renderServersList() {
+      const container = document.getElementById('servers-grid');
+      if (!serversCache.length) {
+        container.innerHTML = `
+          <div class="col-span-full glass-card p-10 rounded-2xl text-center space-y-3 border border-gray-800">
+            <div class="w-12 h-12 rounded-2xl bg-dark-800 text-gray-400 flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-server"></i></div>
+            <h4 class="text-sm font-semibold text-gray-300">ဆာဗာ မရှိသေးပါ</h4>
+            <p class="text-xs text-gray-500">ညာဘက်အပေါ်ရှိ "+ Add Server" ကို နှိပ်ပြီး X-UI Node အသစ်ထည့်သွင်းပါ</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      serversCache.forEach(s => {
+        const isActive = s.status !== 'inactive';
+        
+        // Circular Flag Element
+        let flagElem = '';
+        if (s.flagUrl && (s.flagUrl.startsWith('http://') || s.flagUrl.startsWith('https://'))) {
+          flagElem = `
+            <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-brand-500/40 shadow-md shrink-0 flex items-center justify-center bg-dark-900 p-0.5">
+              <img src="${s.flagUrl}" alt="flag" class="w-full h-full object-cover rounded-full" />
+            </div>
+          `;
+        } else {
+          flagElem = `
+            <div class="w-10 h-10 rounded-full border-2 border-brand-500/40 shadow-md shrink-0 flex items-center justify-center bg-dark-900 text-lg">
+              ${s.flag || '🌐'}
+            </div>
+          `;
+        }
+
+        // Circular SIM Logo and Badge
+        const simCat = (s.simCategory || 'all').toLowerCase();
+        let simBadge = '';
+        if (simCat === 'dtac') {
+          simBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+              <span class="w-4 h-4 rounded-full bg-white p-0.5 overflow-hidden inline-flex items-center justify-center shrink-0">
+                <img src="${SIM_LOGOS.dtac}" alt="dtac" class="w-full h-full object-contain rounded-full" />
+              </span>
+              DTAC
+            </span>
+          `;
+        } else if (simCat === 'true') {
+          simBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+              <span class="w-4 h-4 rounded-full bg-white p-0.5 overflow-hidden inline-flex items-center justify-center shrink-0">
+                <img src="${SIM_LOGOS.true}" alt="true" class="w-full h-full object-contain rounded-full" />
+              </span>
+              TRUE H
+            </span>
+          `;
+        } else if (simCat === 'ais') {
+          simBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span class="w-4 h-4 rounded-full bg-white p-0.5 overflow-hidden inline-flex items-center justify-center shrink-0">
+                <img src="${SIM_LOGOS.ais}" alt="ais" class="w-full h-full object-contain rounded-full" />
+              </span>
+              AIS
+            </span>
+          `;
+        } else if (simCat === 'myanmar') {
+          simBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              <span class="w-4 h-4 rounded-full bg-white p-0.5 overflow-hidden inline-flex items-center justify-center shrink-0">
+                <img src="${SIM_LOGOS.myanmar}" alt="mm" class="w-full h-full object-contain rounded-full" />
+              </span>
+              Myanmar All
+            </span>
+          `;
+        } else {
+          simBadge = `
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-700/50 text-gray-300 border border-gray-600">
+              <i class="fa-solid fa-globe text-[9px]"></i> All SIMs
+            </span>
+          `;
+        }
+
+        html += `
+          <div class="glass-card rounded-2xl p-4 border ${isActive ? 'border-brand-500/30' : 'border-gray-800 opacity-60'} space-y-3 bg-[#0f172a]/80 shadow-xl">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                ${flagElem}
+                <div>
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <h4 class="text-xs font-bold text-white tracking-wide">${s.name}</h4>
+                    ${simBadge}
+                  </div>
+                  <span class="text-[10px] text-brand-400 font-mono font-bold">Inbound #${s.inboundId || 1}</span>
+                </div>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-gray-800 text-gray-400 border border-gray-700'}">${isActive ? 'Active' : 'Disabled'}</span>
+            </div>
+
+            <div class="p-3 bg-dark-950/70 rounded-xl space-y-1.5 text-xs font-mono border border-gray-800/60">
+              <div class="flex justify-between items-center"><span class="text-gray-500 text-[11px] font-sans">Panel Link:</span><span class="text-gray-300 truncate max-w-[190px] select-all" title="${s.panelUrl}">${s.panelUrl}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500 text-[11px] font-sans">Username:</span><span class="text-brand-300">${s.username || 'admin'}</span></div>
+              ${s.note ? `<p class="text-[10px] text-gray-400 font-sans pt-1 border-t border-gray-800/70"><i class="fa-solid fa-circle-info text-brand-400 mr-1"></i>${s.note}</p>` : ''}
+            </div>
+
+            <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
+              <button onclick="toggleServerStatus('${s.id}', ${isActive})" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg ${isActive ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'} transition">
+                ${isActive ? 'ပိတ်မည်' : 'ဖွင့်မည်'}
+              </button>
+              
+              <div class="flex items-center gap-1.5">
+                <button onclick="openEditServerModal('${s.id}')" class="px-3 py-1 text-[11px] font-semibold rounded-lg bg-dark-800 hover:bg-dark-700 text-gray-200 border border-gray-700 transition flex items-center gap-1">
+                  <i class="fa-solid fa-pen"></i> ပြင်မည်
+                </button>
+                <button onclick="deleteServer('${s.id}', '${s.name}')" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-rose-600/10 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20 transition flex items-center gap-1">
+                  <i class="fa-solid fa-trash"></i> ဖျက်မည်
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    window.openAddServerModal = function() {
+      document.getElementById('server-edit-id').value = '';
+      document.getElementById('server-modal-title').innerText = 'Add Server';
+      document.getElementById('btn-save-server').innerText = 'Save Server Details';
+      document.getElementById('server-name-input').value = '';
+      document.getElementById('server-note-input').value = '';
+      document.getElementById('server-flag-input').value = '';
+      document.getElementById('server-inbound-input').value = '1';
+      document.getElementById('server-panelurl-input').value = '';
+      document.getElementById('server-username-input').value = 'admin';
+      document.getElementById('server-password-input').value = '';
+      selectFormSimCategory('all');
+      document.getElementById('modal-server-form').style.display = 'flex';
+    };
+
+    window.openEditServerModal = function(id) {
+      const s = serversCache.find(x => x.id === id);
+      if (!s) return;
+      document.getElementById('server-edit-id').value = id;
+      document.getElementById('server-modal-title').innerText = 'Edit Server';
+      document.getElementById('btn-save-server').innerText = 'Update Server Details';
+      document.getElementById('server-name-input').value = s.name || '';
+      document.getElementById('server-note-input').value = s.note || '';
+      document.getElementById('server-flag-input').value = s.flagUrl || s.flag || '';
+      document.getElementById('server-inbound-input').value = s.inboundId || 1;
+      document.getElementById('server-panelurl-input').value = s.panelUrl || '';
+      document.getElementById('server-username-input').value = s.username || 'admin';
+      document.getElementById('server-password-input').value = s.password || '';
+      selectFormSimCategory(s.simCategory || 'all');
+      document.getElementById('modal-server-form').style.display = 'flex';
+    };
+
+    window.closeServerModal = function() {
+      document.getElementById('modal-server-form').style.display = 'none';
+      document.getElementById('server-edit-id').value = '';
+    };
+
+    window.toggleServerPasswordVisibility = function() {
+      const input = document.getElementById('server-password-input');
+      const icon = document.getElementById('server-pwd-eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-regular fa-eye';
+      }
+    };
+
+    window.saveServerForm = async function(e) {
+      e.preventDefault();
+      const editId = document.getElementById('server-edit-id').value;
+      const panelUrl = document.getElementById('server-panelurl-input').value.trim();
+      const flagVal = document.getElementById('server-flag-input').value.trim();
+      const simCategory = document.getElementById('server-sim-category-input').value || 'all';
+
+      let isHttpUrl = flagVal.startsWith('http://') || flagVal.startsWith('https://');
+      
+      let address = '';
+      let port = 443;
+      try {
+        const u = new URL(panelUrl);
+        address = u.hostname;
+      } catch(_) {
+        address = panelUrl.replace(/https?:\/\//, '').split(':')[0].split('/')[0];
+      }
+
+      const payload = {
+        name: document.getElementById('server-name-input').value.trim(),
+        simCategory: simCategory,
+        note: document.getElementById('server-note-input').value.trim(),
+        flagUrl: isHttpUrl ? flagVal : null,
+        flag: isHttpUrl ? null : (flagVal || '🌐'),
+        inboundId: parseInt(document.getElementById('server-inbound-input').value) || 1,
+        panelUrl: panelUrl,
+        username: document.getElementById('server-username-input').value.trim(),
+        password: document.getElementById('server-password-input').value,
+        address: address,
+        port: port,
+        protocol: 'vless',
+        status: 'active',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        if (editId) {
+          await db.collection('servers').doc(editId).update(payload);
+          showToast("Server ပြင်ဆင်ပြီးပါပြီ!", "success");
+        } else {
+          payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('servers').add(payload);
+          showToast("Server အသစ် ထည့်သွင်းပြီးပါပြီ!", "success");
+        }
+        closeServerModal();
+      } catch(err) { showToast("Error: " + err.message, "error"); }
+      finally { document.getElementById('global-loader').style.display = 'none'; }
+    };
+
+    window.toggleServerStatus = async function(id, cur) {
+      try {
+        await db.collection('servers').doc(id).update({
+          status: cur ? 'inactive' : 'active',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast(cur ? "ဆာဗာကို ပိတ်လိုက်ပါပြီ" : "ဆာဗာကို ဖွင့်လိုက်ပါပြီ", "info");
+      } catch(e) { showToast(e.message, 'error'); }
+    };
+
+    window.deleteServer = async function(id, name) {
+      if (confirm(`ဆာဗာ "${name}" ကို အပြီးတိုင် ဖျက်ပစ်မှာ သေချာပါသလား?`)) {
+        try {
+          await db.collection('servers').doc(id).delete();
+          showToast(`ဆာဗာ ဖျက်လိုက်ပါပြီ`, "info");
+        } catch(e) { showToast("Error: " + e.message, "error"); }
+      }
+    };
+
+    // =========================================================================
+    // PAYMENT LOGIC WITH DELETE SUPPORT
+    // =========================================================================
+    function renderPaymentTable() {
+      const tbody = document.getElementById('payment-table-body');
+      let filtered = paymentsCache;
+      if (currentFilter !== 'all') filtered = paymentsCache.filter(p => p.status === currentFilter);
+
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-500">ငွေသွင်းမှတ်တမ်း မရှိပါ</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      filtered.forEach((p) => {
+        const dateStr = p.createdAt ? new Date(p.createdAt.toMillis()).toLocaleString() : 'Just now';
+        let statusBadge = p.status === 'approved' ? `<span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-check mr-1"></i>Approved</span>` :
+                          p.status === 'rejected' ? `<span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20"><i class="fa-solid fa-xmark mr-1"></i>Rejected</span>` :
+                          `<span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-clock mr-1"></i>Pending</span>`;
+
+        const slipButton = p.slipUrl ? `<button onclick="openSlipModal('${p.id}')" class="px-2.5 py-1 bg-brand-600/20 hover:bg-brand-600 text-brand-300 hover:text-white rounded-lg border border-brand-500/30 transition text-[11px]"><i class="fa-regular fa-image"></i> Slip ကြည့်မည်</button>` : `<span class="text-gray-500 text-[11px] italic">မတင်ရသေးပါ</span>`;
+        
+        let actions = `<div class="flex items-center justify-end gap-1.5">`;
+        if(p.status === 'pending') {
+            actions += `
+                <button onclick="approvePayment('${p.id}', '${p.userId}', ${p.amount})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[11px]"><i class="fa-solid fa-check"></i> Approve</button>
+                <button onclick="openRejectModal('${p.id}')" class="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white rounded-lg font-semibold text-[11px]"><i class="fa-solid fa-xmark"></i></button>
+            `;
+        }
+        actions += `<button onclick="deletePayment('${p.id}')" class="px-2.5 py-1.5 bg-dark-800 border border-gray-700 hover:bg-rose-600 hover:border-rose-500 text-gray-400 hover:text-white rounded-lg transition" title="မှတ်တမ်းဖျက်မည်"><i class="fa-solid fa-trash-can"></i></button></div>`;
+
+        html += `
+          <tr class="hover:bg-dark-800/40 transition group">
+            <td class="p-3.5 font-mono font-bold text-white">${p.paymentId || p.id}</td>
+            <td class="p-3.5"><p class="font-bold text-white">${p.displayName || 'User'}</p><p class="text-[10px] text-gray-400">${p.email || '-'}</p></td>
+            <td class="p-3.5 font-bold text-emerald-400 text-sm">${(p.amount || 0).toFixed(2)} ${p.currency || 'THB'}</td>
+            <td class="p-3.5">${slipButton}</td>
+            <td class="p-3.5 text-gray-400">${dateStr}</td>
+            <td class="p-3.5">${statusBadge}</td>
+            <td class="p-3.5 text-right">${actions}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    window.deletePayment = async function(id) {
+      if(!confirm("ဤငွေသွင်းမှတ်တမ်းကို ဖျက်ပစ်မှာ သေချာပါသလား?")) return;
+      try {
+        await db.collection('topupRequests').doc(id).delete();
+        showToast("မှတ်တမ်းဖျက်လိုက်ပါပြီ", "success");
+      } catch(e) {
+        showToast("Error: " + e.message, "error");
+      }
+    };
+
+    window.deleteAllPayments = async function() {
+      if(!paymentsCache.length) return showToast("ဖျက်စရာ မှတ်တမ်းမရှိပါ", "info");
+      if(!confirm("သတိပေးချက်: လက်ရှိငွေသွင်းမှတ်တမ်း အားလုံးကို အပြီးတိုင် ဖျက်ပစ်မှာ သေချာပါသလား?\n(ဤလုပ်ဆောင်ချက်ကို နောက်ပြန်ဆုတ်၍မရပါ)")) return;
+
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        const deletePromises = paymentsCache.map(p => 
+          db.collection('topupRequests').doc(p.id).delete()
+        );
+        await Promise.all(deletePromises);
+        showToast("မှတ်တမ်းအားလုံးကို အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ", "success");
+      } catch(err) {
+        showToast("Error: " + err.message, "error");
+      } finally {
+        document.getElementById('global-loader').style.display = 'none';
+      }
+    };
+
+    // Bank Functions
+    function renderBanksList() {
+      const container = document.getElementById('banks-grid');
+      if (!banksCache.length) {
+        container.innerHTML = `<div class="col-span-full glass-card p-8 rounded-2xl text-center text-gray-400"><p class="text-xs">ဘဏ်အကောင့် မရှိသေးပါ။ "+ ဘဏ်အကောင့် အသစ်ထည့်မည်" ကို နှိပ်ပါ</p></div>`;
+        return;
+      }
+      let html = '';
+      banksCache.forEach(b => {
+        const isActive = b.status !== 'inactive';
+        const logoImg = b.logoUrl ? `<img src="${b.logoUrl}" alt="logo" class="w-8 h-8 rounded-full object-contain bg-white/10 p-1 border border-gray-700" />` : `<div class="w-8 h-8 rounded-full bg-brand-600/20 text-brand-400 flex items-center justify-center text-xs"><i class="fa-solid fa-building-columns"></i></div>`;
+        const qrSection = b.qrCodeUrl ? `
+          <div class="pt-2 border-t border-gray-800 flex items-center gap-2">
+            <img src="${b.qrCodeUrl}" alt="QR" class="w-12 h-12 rounded-lg border border-gray-700 bg-white object-contain p-0.5" />
+            <div class="text-[10px] text-emerald-400"><i class="fa-solid fa-qrcode mr-1"></i>QR Code ထည့်ထားပြီး</div>
+          </div>` : '';
+
+        html += `
+          <div class="glass-card rounded-2xl p-4 border ${isActive ? 'border-gray-800' : 'border-rose-900/40 opacity-75'} space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                ${logoImg}
+                <span class="text-xs font-bold text-white">${b.bankName}</span>
+              </div>
+              <span class="px-2 py-0.5 text-[10px] rounded font-bold ${isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-gray-700 text-gray-400'}">${isActive ? 'Active' : 'Disabled'}</span>
+            </div>
+            <div class="p-3 bg-dark-950/60 rounded-xl space-y-1.5 text-xs">
+              <div class="flex justify-between"><span class="text-gray-400 text-[11px]">အမည်:</span><span class="text-white font-semibold">${b.accountName}</span></div>
+              <div class="flex justify-between items-center"><span class="text-gray-400 text-[11px]">အကောင့်/ဖုန်း:</span><span class="text-brand-400 font-mono font-bold">${b.accountNumber}</span></div>
+              ${qrSection}
+              ${b.note ? `<p class="text-[10px] text-gray-500 pt-1 border-t border-gray-800">${b.note}</p>` : ''}
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-1 border-t border-gray-800/60">
+              <button onclick="toggleBankStatus('${b.id}', ${isActive})" class="px-2.5 py-1 text-[11px] rounded-lg ${isActive ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}">${isActive ? 'ပိတ်မည်' : 'ဖွင့်မည်'}</button>
+              <button onclick="openEditBankModal('${b.id}')" class="px-2.5 py-1 text-[11px] rounded-lg bg-dark-800 hover:bg-gray-700 text-gray-300">ပြင်မည်</button>
+              <button onclick="deleteBank('${b.id}', '${b.bankName}')" class="px-2.5 py-1 text-[11px] rounded-lg bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white transition"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    window.openAddBankModal = function() {
+      document.getElementById('bank-edit-id').value = '';
+      document.getElementById('bank-modal-title').innerHTML = '<i class="fa-solid fa-building-columns text-brand-500 mr-2"></i>ဘဏ်စာရင်း အသစ်ထည့်မည်';
+      document.getElementById('bank-name-input').value = '';
+      document.getElementById('bank-accname-input').value = '';
+      document.getElementById('bank-accnum-input').value = '';
+      document.getElementById('bank-logourl-input').value = '';
+      document.getElementById('bank-qrurl-input').value = '';
+      document.getElementById('bank-note-input').value = '';
+      document.getElementById('modal-bank-form').style.display = 'flex';
+    };
+
+    window.openEditBankModal = function(id) {
+      const b = banksCache.find(x => x.id === id);
+      if (!b) return;
+      document.getElementById('bank-edit-id').value = id;
+      document.getElementById('bank-modal-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-brand-500 mr-2"></i>ဘဏ်စာရင်း ပြင်ဆင်မည်';
+      document.getElementById('bank-name-input').value = b.bankName || '';
+      document.getElementById('bank-accname-input').value = b.accountName || '';
+      document.getElementById('bank-accnum-input').value = b.accountNumber || '';
+      document.getElementById('bank-logourl-input').value = b.logoUrl || '';
+      document.getElementById('bank-qrurl-input').value = b.qrCodeUrl || '';
+      document.getElementById('bank-note-input').value = b.note || '';
+      document.getElementById('modal-bank-form').style.display = 'flex';
+    };
+
+    window.closeBankModal = function() { document.getElementById('modal-bank-form').style.display = 'none'; };
+
+    window.saveBankForm = async function(e) {
+      e.preventDefault();
+      const editId = document.getElementById('bank-edit-id').value;
+      const payload = {
+        bankName: document.getElementById('bank-name-input').value.trim(),
+        accountName: document.getElementById('bank-accname-input').value.trim(),
+        accountNumber: document.getElementById('bank-accnum-input').value.trim(),
+        logoUrl: document.getElementById('bank-logourl-input').value.trim() || null,
+        qrCodeUrl: document.getElementById('bank-qrurl-input').value.trim() || null,
+        note: document.getElementById('bank-note-input').value.trim() || '',
+        status: 'active',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        if (editId) {
+          await db.collection('banks').doc(editId).update(payload);
+          showToast("ဘဏ်စာရင်း အချက်အလက် ပြင်ဆင်ပြီးပါပြီ!", "success");
+        } else {
+          payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('banks').add(payload);
+          showToast("ဘဏ်အကောင့် အသစ်ကို ထည့်သွင်းပြီးပါပြီ!", "success");
+        }
+        closeBankModal();
+      } catch(err) { showToast("Error: " + err.message, "error"); }
+      finally { document.getElementById('global-loader').style.display = 'none'; }
+    };
+
+    window.toggleBankStatus = async function(id, cur) {
+      try { await db.collection('banks').doc(id).update({ status: cur ? 'inactive' : 'active', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); }
+      catch(e) { showToast(e.message, 'error'); }
+    };
+
+    window.deleteBank = async function(id, name) {
+      if (confirm(`"${name}" ကို ဖျက်ပစ်မှာ သေချာပါသလား?`)) {
+        await db.collection('banks').doc(id).delete();
+        showToast("ဘဏ်စာရင်း ဖျက်ပြီးပါပြီ", "info");
+      }
+    };
+
+    // Payment Approval/Rejection
+    window.approvePayment = async function(paymentId, userId, amount) {
+      if (!confirm(`Payment: ${paymentId} ကို Approve လုပ်ပြီး User Balance ထဲ ${amount} THB ပေါင်းထည့်မည်လား?`)) return;
+
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        const batch = db.batch();
+        
+        batch.update(db.collection('topupRequests').doc(paymentId), {
+          status: 'approved', approvedAt: firebase.firestore.FieldValue.serverTimestamp(), approvedBy: currentAdmin.email
+        });
+
+        batch.update(db.collection('users').doc(userId), {
+          balance: firebase.firestore.FieldValue.increment(amount),
+          totalTopUp: firebase.firestore.FieldValue.increment(amount),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        batch.set(db.collection('transactions').doc(), {
+          userId, type: 'topup', amount, currency: 'THB', referenceId: paymentId,
+          description: `TopUp Approved by Admin`, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await batch.commit();
+        showToast(`${amount} THB ကို User Balance ထဲ ထည့်သွင်းပြီးပါပြီ!`, "success");
+        closeSlipModal();
+      } catch(err) { showToast("Approve Error: " + err.message, "error"); }
+      finally { document.getElementById('global-loader').style.display = 'none'; }
+    };
+
+    window.openRejectModal = function(id) { pendingRejectPaymentId = id; document.getElementById('reject-reason-input').value = ''; document.getElementById('modal-reject-reason').style.display = 'flex'; };
+    window.closeRejectModal = function() { pendingRejectPaymentId = null; document.getElementById('modal-reject-reason').style.display = 'none'; };
+    window.setRejectReasonText = function(txt) { document.getElementById('reject-reason-input').value = txt; };
+    window.confirmRejectPayment = async function() {
+      if (!pendingRejectPaymentId) return;
+      const reason = document.getElementById('reject-reason-input').value.trim() || 'ငွေလွှဲပြေစာ မမှန်ကန်ပါ';
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        await db.collection('topupRequests').doc(pendingRejectPaymentId).update({
+          status: 'rejected', rejectReason: reason, rejectedAt: firebase.firestore.FieldValue.serverTimestamp(), rejectedBy: currentAdmin.email
+        });
+        showToast("Payment ကို ပယ်ချလိုက်ပါပြီ", "info");
+        closeRejectModal(); closeSlipModal();
+      } catch(err) { showToast(err.message, "error"); }
+      finally { document.getElementById('global-loader').style.display = 'none'; }
+    };
+
+    window.openSlipModal = function(id) {
+      const payment = paymentsCache.find(p => p.id === id);
+      if (!payment || !payment.slipUrl) return showToast("Slip ပုံ မရှိပါ", "error");
+      activeModalPayment = payment;
+      document.getElementById('modal-slip-img').src = payment.slipUrl;
+      document.getElementById('modal-slip-info').innerText = `${payment.paymentId || payment.id} | ${(payment.amount || 0).toFixed(2)} ${payment.currency || 'THB'} (${payment.displayName || 'User'})`;
+      document.getElementById('modal-btn-approve').style.display = payment.status === 'pending' ? 'block' : 'none';
+      document.getElementById('modal-btn-reject').style.display = payment.status === 'pending' ? 'block' : 'none';
+      document.getElementById('modal-slip-preview').style.display = 'flex';
+    };
+    window.closeSlipModal = function() { document.getElementById('modal-slip-preview').style.display = 'none'; document.getElementById('modal-slip-img').src = ''; activeModalPayment = null; };
+    window.quickApproveFromModal = function() { if (activeModalPayment) approvePayment(activeModalPayment.id, activeModalPayment.userId, activeModalPayment.amount); };
+    window.quickRejectFromModal = function() { if (activeModalPayment) openRejectModal(activeModalPayment.id); };
+
+    // UI Tab Switches and Filters
+    window.filterPayments = function(t) {
+      currentFilter = t;
+      ['all', 'pending', 'approved', 'rejected'].forEach(x => {
+        document.getElementById(`btn-filter-${x}`).className = x === t ? "px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white border border-brand-500" : "px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-gray-400 hover:text-white border border-gray-800";
+      });
+      renderPaymentTable();
+    };
+
+    window.switchAdminTab = function(t) {
+      ['servers', 'payments', 'banks', 'users', 'settings'].forEach(x => {
+        document.getElementById(`adm-view-${x}`).style.display = x === t ? 'block' : 'none';
+        document.getElementById(`adm-tab-${x}`).className = x === t ? "py-3 text-xs sm:text-sm font-bold border-b-2 border-brand-500 text-brand-400 flex items-center gap-2 whitespace-nowrap" : "py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white flex items-center gap-2 whitespace-nowrap";
+      });
+    };
+
+    window.handleAdminLogin = async function(e) {
+      e.preventDefault();
+      try {
+        document.getElementById('global-loader').style.display = 'flex';
+        await auth.signInWithEmailAndPassword(document.getElementById('admin-login-email').value.trim(), document.getElementById('admin-login-password').value);
+      } catch(err) { showToast(err.message, "error"); }
+      finally { document.getElementById('global-loader').style.display = 'none'; }
+    };
+
+    window.handleAdminLogout = async function() { if (auth) await auth.signOut(); };
+  </script>
+</body>
+</html>
